@@ -18,13 +18,61 @@ type LoginUser = {
 };
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+
+  if (!origin || origin !== request.nextUrl.origin) {
+    return NextResponse.json(
+      { success: false, error: "Invalid request origin" },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.split(";")[0].trim().toLowerCase() !== "application/json") {
+    return NextResponse.json(
+      { success: false, error: "JSON content type required" },
+      { status: 415 }
+    );
+  }
+
+  const contentLength = request.headers.get("content-length");
+
+  if (
+    contentLength !== null &&
+    (!/^\\d+$/.test(contentLength) || Number(contentLength) > 4096)
+  ) {
+    return NextResponse.json(
+      { success: false, error: "Request body too large" },
+      { status: 413 }
+    );
+  }
+
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+
+    if (Buffer.byteLength(rawBody, "utf8") > 4096) {
+      return NextResponse.json(
+        { success: false, error: "Request body too large" },
+        { status: 413 }
+      );
+    }
+
+    let body: unknown;
+
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON" },
+        { status: 400 }
+      );
+    }
 
     if (
-      !body ||
-      typeof body.email !== "string" ||
-      typeof body.password !== "string"
+      typeof body !== "object" ||
+      body === null ||
+      Array.isArray(body)
     ) {
       return NextResponse.json(
         { success: false, error: "Invalid login request" },
@@ -32,8 +80,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const email = body.email.trim().toLowerCase();
-    const password = body.password;
+    const credentials = body as Record<string, unknown>;
+
+    if (
+      !body ||
+      typeof credentials.email !== "string" ||
+      typeof credentials.password !== "string"
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Invalid login request" },
+        { status: 400 }
+      );
+    }
+
+    const email = (credentials.email as string).trim().toLowerCase();
+    const password = credentials.password as string;
 
     if (
       email.length === 0 ||
