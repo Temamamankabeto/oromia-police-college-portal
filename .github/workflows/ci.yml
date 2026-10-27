@@ -38,3 +38,18 @@ jobs:
 
       - name: Build Next.js
         run: npm run build
+
+      - name: Prepare standalone deployment package
+        run: |
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/static
+          cp -a public .next/standalone/public
+          tar -czf opc-portal-deploy.tar.gz -C .next/standalone .
+
+      - name: Upload production deployment package
+        uses: actions/upload-artifact@v4
+        with:
+          name: opc-portal-production
+          path: opc-portal-deploy.tar.gz
+          retention-days: 7
+          if-no-files-found: error
