@@ -25,7 +25,7 @@ type LoginUser = {
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
 
-  if (!origin || origin !== request.nextUrl.origin) {
+  if (!origin || origin !== "https://opc.osdavc.com") {
     return NextResponse.json(
       { success: false, error: "Invalid request origin" },
       { status: 403, headers: { "Cache-Control": "no-store" } }

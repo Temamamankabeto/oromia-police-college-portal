@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
-  const expectedOrigin = request.nextUrl.origin;
+  const expectedOrigin = "https://opc.osdavc.com";
 
   if (!origin || origin !== expectedOrigin) {
     return NextResponse.json(
