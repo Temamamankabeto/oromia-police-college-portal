@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import {
+  rateLimitIdentifier,
+  isLoginBlocked,
+  recordLoginAttempt,
+} from "@/lib/auth/rate-limit";
+import {
   SESSION_COOKIE,
   createSessionToken,
   sessionCookieOptions,
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   if (
     contentLength !== null &&
-    (!/^\\d+$/.test(contentLength) || Number(contentLength) > 4096)
+    (!/^[0-9]+$/.test(contentLength) || Number(contentLength) > 4096)
   ) {
     return NextResponse.json(
       { success: false, error: "Request body too large" },
@@ -108,6 +113,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const accountKey = rateLimitIdentifier("account", email);
+
+    if (await isLoginBlocked(accountKey, 5)) {
+      return NextResponse.json(
+        { success: false, error: "Too many login attempts. Try again later." },
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": "900",
+          },
+        }
+      );
+    }
+
     const result = await query<LoginUser>(
       `
       SELECT
@@ -133,6 +153,24 @@ export async function POST(request: NextRequest) {
       !user ||
       !(await verifyPassword(user.password_hash, password))
     ) {
+      const blocked = await recordLoginAttempt(accountKey, 5);
+
+      if (blocked) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Too many login attempts. Try again later.",
+          },
+          {
+            status: 429,
+            headers: {
+              "Cache-Control": "no-store",
+              "Retry-After": "900",
+            },
+          }
+        );
+      }
+
       return NextResponse.json(
         { success: false, error: "Invalid email or password" },
         { status: 401 }
