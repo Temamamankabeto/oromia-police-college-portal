@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ActivitiesManager from "./activities-manager";
+import ObjectivesManager from "./objectives-manager";
 
 type Module = {
   id: string;
@@ -509,7 +510,7 @@ export default function ModulesManager({
                         onClick={() => setSelectedModule(item)}
                         className="font-semibold text-blue-700 hover:underline"
                       >
-                        Activities
+                        Manage Details
                       </button>
                     </td>
                     {canManage && (
@@ -546,13 +547,40 @@ export default function ModulesManager({
         </div>
       </div>
       {selectedModule && (
-        <ActivitiesManager
-          key={selectedModule.id}
-          moduleId={selectedModule.id}
-          moduleTitle={selectedModule.title}
-          canManage={canManage}
-          onClose={() => setSelectedModule(null)}
-        />
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <div>
+              <h3 className="text-lg font-bold text-blue-950">
+                {selectedModule.module_code} — {selectedModule.title}
+              </h3>
+              <p className="text-sm text-slate-600">
+                Manage objectives, activities, and functional requirements.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedModule(null)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium"
+            >
+              Close Module Details
+            </button>
+          </div>
+
+          <ObjectivesManager
+            key={`objectives-${selectedModule.id}`}
+            moduleId={selectedModule.id}
+            moduleTitle={selectedModule.title}
+            canManage={canManage}
+          />
+
+          <ActivitiesManager
+            key={`activities-${selectedModule.id}`}
+            moduleId={selectedModule.id}
+            moduleTitle={selectedModule.title}
+            canManage={canManage}
+            onClose={() => setSelectedModule(null)}
+          />
+        </div>
       )}
     </div>
   );
