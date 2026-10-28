@@ -1,0 +1,164 @@
+name: OPC Production Requirements Seed
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Choose dry-run first; apply writes to production"
+        required: true
+        type: choice
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      confirmation:
+        description: "For apply, enter SEED-OPC-32"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opc-production
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate confirmation
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$MODE" == "apply" &&
+                "$CONFIRMATION" != "SEED-OPC-32" ]]; then
+            echo "Apply requires confirmation SEED-OPC-32"
+            exit 1
+          fi
+
+          node --check scripts/seed-opc-modules.mjs
+          python3 -m json.tool \
+            database/seeds/opc-32-modules.json >/dev/null
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload seed files
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_USER"
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            'mkdir -p "$HOME/.opc-deploy/seed-staging" && chmod 700 "$HOME/.opc-deploy/seed-staging"'
+
+          scp -o StrictHostKeyChecking=yes \
+            scripts/seed-opc-modules.mjs \
+            database/seeds/opc-32-modules.json \
+            "$SSH_USER@$SSH_HOST:~/.opc-deploy/seed-staging/"
+
+      - name: Execute production seed
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "OPC_SEED_MODE='$MODE' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          [[ "$HOME" == "/home/osdavcax" ]] || exit 1
+          [[ "$OPC_SEED_MODE" == "dry-run" ||
+             "$OPC_SEED_MODE" == "apply" ]] || exit 1
+
+          cd "$HOME/opc-portal"
+
+          NODE_BIN="$HOME/nodevenv/opc-portal/22/bin/node"
+          CONFIG="$HOME/.opc-deploy/production.env"
+          STAGING="$HOME/.opc-deploy/seed-staging"
+
+          [[ -x "$NODE_BIN" ]] || exit 1
+          [[ -f "$CONFIG" ]] || exit 1
+          [[ "$(stat -c %a "$CONFIG")" == "600" ]] || exit 1
+
+          exec 9>"$HOME/.opc-deploy/deployment.lock"
+          flock -n 9 || {
+            echo "Another production operation is running"
+            exit 1
+          }
+
+          set -a
+          source "$CONFIG"
+          set +a
+
+          [[ -n "${DATABASE_URL:-}" ]] || exit 1
+
+          # Execute the seed outside the live application directory.
+          # A temporary workspace keeps production application files unchanged.
+          WORK_DIR="$(mktemp -d "$HOME/.opc-deploy/seed-work.XXXXXXXX")"
+          trap 'rm -rf -- "$WORK_DIR"' EXIT
+
+          mkdir -p "$WORK_DIR/scripts" "$WORK_DIR/database/seeds"
+
+          cp "$STAGING/opc-32-modules.json" \
+            "$WORK_DIR/database/seeds/opc-32-modules.json"
+
+          cp "$STAGING/seed-opc-modules.mjs" \
+            "$WORK_DIR/scripts/seed-opc-modules.mjs"
+
+          # Resolve pg from the deployed application's dependencies.
+          ln -s "$HOME/opc-portal/node_modules" "$WORK_DIR/node_modules"
+
+          # Node resolves packages relative to the script's directory.
+          # Keep the seed script inside this temporary workspace.
+          ln -s "$HOME/opc-portal/node_modules" "$WORK_DIR/scripts/node_modules"
+
+          cd "$WORK_DIR"
+
+          if [[ "$OPC_SEED_MODE" == "apply" ]]; then
+            BACKUP_DIR="$HOME/opc-backups/requirements-seed-$(date -u +%Y%m%dT%H%M%SZ)"
+            mkdir -m 700 "$BACKUP_DIR"
+
+            pg_dump --format=custom --no-password \
+              --file="$BACKUP_DIR/production.dump" \
+              "$DATABASE_URL"
+
+            chmod 600 "$BACKUP_DIR/production.dump"
+            pg_restore --list \
+              "$BACKUP_DIR/production.dump" >/dev/null
+
+            echo "PRODUCTION_BACKUP_VERIFIED"
+
+            OPC_SEED_CONFIRM=YES \
+              "$NODE_BIN" scripts/seed-opc-modules.mjs --apply
+          else
+            "$NODE_BIN" scripts/seed-opc-modules.mjs --dry-run
+          fi
+          REMOTE
