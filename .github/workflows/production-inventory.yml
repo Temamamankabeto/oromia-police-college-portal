@@ -1,0 +1,80 @@
+name: OPC Production Module Inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Read production module inventory
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "$HOME/opc-portal"
+
+          set -a
+          source "$HOME/.opc-deploy/production.env"
+          set +a
+
+          "$HOME/nodevenv/opc-portal/22/bin/node" --input-type=module <<'JS'
+          import pg from "pg";
+
+          const pool = new pg.Pool({
+            connectionString: process.env.DATABASE_URL,
+            max: 1,
+          });
+
+          try {
+            const result = await pool.query(`
+              SELECT
+                m.id,
+                m.module_code,
+                m.title,
+                COALESCE(r.approval_status, 'PENDING') AS approval_status,
+                (
+                  SELECT COUNT(*)
+                  FROM module_activities a
+                  WHERE a.module_id = m.id
+                    AND a.deleted_at IS NULL
+                ) AS activities,
+                (
+                  SELECT COUNT(*)
+                  FROM module_objectives o
+                  WHERE o.module_id = m.id
+                    AND o.deleted_at IS NULL
+                ) AS objectives
+              FROM institutional_modules m
+              LEFT JOIN module_reviews r ON r.module_id = m.id
+              WHERE m.deleted_at IS NULL
+              ORDER BY m.display_order, m.id
+            `);
+
+            console.log("=== PRODUCTION MODULE INVENTORY ===");
+            console.log("Total modules:", result.rowCount);
+            console.table(result.rows);
+          } finally {
+            await pool.end();
+          }
+          JS
+          REMOTE
