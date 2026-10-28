@@ -9,6 +9,7 @@ permissions:
 jobs:
   inventory:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 10
 
     steps:
@@ -28,6 +29,9 @@ jobs:
           SSH_HOST: ${{ vars.OPC_SSH_HOST }}
           SSH_USER: ${{ vars.OPC_SSH_USER }}
         run: |
+          test -n "$SSH_HOST" || { echo "SSH_HOST is missing"; exit 1; }
+          test -n "$SSH_USER" || { echo "SSH_USER is missing"; exit 1; }
+
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
