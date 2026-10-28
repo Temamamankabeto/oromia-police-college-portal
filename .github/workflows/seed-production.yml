@@ -12,8 +12,8 @@ on:
           - dry-run
           - apply
       confirmation:
-        description: "For apply, enter SEED-OPC-32"
-        required: false
+        description: "Required: enter SEED-OPC-32 for production apply; enter DRY-RUN for testing"
+        required: true
         type: string
 
 permissions:
@@ -43,9 +43,18 @@ jobs:
 
           if [[ "$MODE" == "apply" &&
                 "$CONFIRMATION" != "SEED-OPC-32" ]]; then
-            echo "Apply requires confirmation SEED-OPC-32"
+            echo "Apply requires exact confirmation: SEED-OPC-32"
+            echo "The production seed was NOT executed."
             exit 1
           fi
+
+          if [[ "$MODE" == "dry-run" &&
+                "$CONFIRMATION" != "DRY-RUN" ]]; then
+            echo "Dry-run requires confirmation: DRY-RUN"
+            exit 1
+          fi
+
+          echo "CONFIRMATION_VALIDATED: $MODE"
 
           node --check scripts/seed-opc-modules.mjs
           python3 -m json.tool \
