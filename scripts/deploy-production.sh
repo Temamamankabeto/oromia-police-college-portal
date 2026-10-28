@@ -65,8 +65,8 @@ restore_transaction() {
 }
 
 on_error() {
-  local status=$?
-  trap - ERR INT TERM
+  local status=${1:-$?}
+  trap - ERR EXIT INT TERM
 
   if (( ACTIVATION_STARTED == 1 && ACTIVATION_COMPLETE == 0 )); then
     restore_transaction || true
