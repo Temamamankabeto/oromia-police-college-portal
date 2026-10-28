@@ -79,17 +79,17 @@ try {
 
   const suffix = randomBytes(5).toString("hex").toUpperCase();
 
-  const module = await request("ADMIN", "POST", "/api/modules", {
+  const createdModule = await request("ADMIN", "POST", "/api/modules", {
     module_code: `M${suffix}`,
     title: "Activity Integration Test Module",
   });
 
-  moduleId = module.data?.data?.id;
+  moduleId = createdModule.data?.data?.id;
 
   check(
     "ADMIN creates parent module",
-    module.status === 201 && Boolean(moduleId),
-    `HTTP ${module.status}: ${module.data?.error ?? ""}`
+    createdModule.status === 201 && Boolean(moduleId),
+    `HTTP ${createdModule.status}: ${createdModule.data?.error ?? ""}`
   );
 
   if (!moduleId) throw new Error("Parent module creation failed");
