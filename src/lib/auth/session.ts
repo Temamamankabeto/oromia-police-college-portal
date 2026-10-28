@@ -18,9 +18,10 @@ function getSessionKey(): Uint8Array {
 }
 
 export async function createSessionToken(
-  userId: string
+  userId: string,
+  sessionVersion: number
 ): Promise<string> {
-  return new SignJWT({})
+  return new SignJWT({ sv: sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
@@ -32,7 +33,7 @@ export async function createSessionToken(
 
 export async function verifySessionToken(
   token: string
-): Promise<string | null> {
+): Promise<{ userId: string; sessionVersion: number } | null> {
   try {
     const { payload } = await jwtVerify(
       token,
@@ -44,7 +45,19 @@ export async function verifySessionToken(
       }
     );
 
-    return payload.sub ?? null;
+    if (
+      !payload.sub ||
+      typeof payload.sv !== "number" ||
+      !Number.isSafeInteger(payload.sv) ||
+      payload.sv < 1
+    ) {
+      return null;
+    }
+
+    return {
+      userId: payload.sub,
+      sessionVersion: payload.sv,
+    };
   } catch {
     return null;
   }

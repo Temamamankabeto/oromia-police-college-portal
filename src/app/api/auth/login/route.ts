@@ -19,13 +19,20 @@ type LoginUser = {
   full_name: string;
   email: string;
   password_hash: string;
+  session_version: number;
   role_code: "ADMIN" | "REVIEWER" | "APPROVER";
 };
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
 
-  if (!origin || origin !== "https://opc.osdavc.com") {
+  const allowedOrigins = ["https://opc.osdavc.com"];
+
+  if (process.env.NODE_ENV === "development") {
+    allowedOrigins.push("http://127.0.0.1:3000");
+  }
+
+  if (!origin || !allowedOrigins.includes(origin)) {
     return NextResponse.json(
       { success: false, error: "Invalid request origin" },
       { status: 403, headers: { "Cache-Control": "no-store" } }
@@ -135,6 +142,7 @@ export async function POST(request: NextRequest) {
         u.full_name,
         u.email,
         u.password_hash,
+        u.session_version,
         r.role_code
       FROM app_users u
       INNER JOIN app_roles r ON r.id = u.role_id
@@ -177,7 +185,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = await createSessionToken(user.id);
+    const token = await createSessionToken(user.id, user.session_version);
 
     const response = NextResponse.json({
       success: true,

@@ -1,13 +1,25 @@
-import SectionPage from "@/components/portal/section-page";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import DashboardShell from "@/components/portal/dashboard-shell";
+import ApprovalsManager from "@/components/portal/approvals-manager";
 
 export const dynamic = "force-dynamic";
 
-export default function Page() {
+export default async function ApprovalsPage() {
+  const user = await getCurrentUser();
+
+  if (!user) redirect("/login");
+
+  if (
+    user.role_code !== "ADMIN" &&
+    user.role_code !== "APPROVER"
+  ) {
+    redirect("/dashboard");
+  }
+
   return (
-    <SectionPage
-      title="Proposal Approvals"
-      description="Review decisions and approve or return proposals."
-      allowedRoles={["ADMIN", "APPROVER"]}
-    />
+    <DashboardShell>
+      <ApprovalsManager role={user.role_code} />
+    </DashboardShell>
   );
 }

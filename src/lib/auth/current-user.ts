@@ -23,9 +23,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return null;
   }
 
-  const userId = await verifySessionToken(token);
+  const session = await verifySessionToken(token);
 
-  if (!userId || !/^[1-9]\d*$/.test(userId)) {
+  if (
+    !session ||
+    !/^[1-9]\d*$/.test(session.userId)
+  ) {
     return null;
   }
 
@@ -40,11 +43,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     INNER JOIN app_roles r ON r.id = u.role_id
     WHERE u.id = $1
       AND u.is_active = TRUE
+      AND u.session_version = $2
       AND u.deleted_at IS NULL
       AND r.role_code IN ('ADMIN', 'REVIEWER', 'APPROVER')
     LIMIT 1
     `,
-    [userId]
+    [session.userId, session.sessionVersion]
   );
 
   return result.rows[0] ?? null;
