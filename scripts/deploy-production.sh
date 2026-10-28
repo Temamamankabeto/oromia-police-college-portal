@@ -119,8 +119,27 @@ exec 9>"$DEPLOY_ROOT/deployment.lock"
 flock -n 9 || die "Another deployment is running"
 
 for existing in "$APP_PATH"/.opc-switch.*; do
-  [[ ! -e "$existing" ]] ||
-    die "Interrupted switch exists: $existing; manual inspection required"
+  [[ -d "$existing" ]] || continue
+
+  echo "Recovering interrupted deployment: $existing"
+
+  # Refuse automatic recovery when transaction evidence is incomplete.
+  for item in "${ITEMS[@]}"; do
+    if [[ ! -e "$existing/old-$item" &&
+          ! -e "$APP_PATH/$item" ]]; then
+      die "Cannot safely recover missing component: $item"
+    fi
+  done
+
+  TRANSACTION="$existing"
+  ACTIVATION_STARTED=1
+  ACTIVATION_COMPLETE=0
+
+  restore_transaction ||
+    die "Interrupted deployment recovery failed: $existing"
+
+  ACTIVATION_STARTED=0
+  ACTIVATION_COMPLETE=0
 done
 
 echo "=== STAGING RELEASE ==="
