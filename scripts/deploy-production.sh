@@ -43,7 +43,10 @@ restore_transaction() {
       rm -rf -- "$APP_PATH/$item" || failed=1
       mv -- "$TRANSACTION/old-$item" "$APP_PATH/$item" || failed=1
     elif [[ -e "$TRANSACTION/installed-$item" ]]; then
-      rm -rf -- "$APP_PATH/$item" || failed=1
+      # Only remove a new component if installation actually occurred.
+      if [[ ! -e "$TRANSACTION/new-$item" ]]; then
+        rm -rf -- "$APP_PATH/$item" || failed=1
+      fi
     fi
   done
 
