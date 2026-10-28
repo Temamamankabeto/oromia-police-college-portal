@@ -1,0 +1,79 @@
+name: OPC Production Deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opc-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Verify production deployment readiness
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/opc_deploy
+          chmod 600 ~/.ssh/opc_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify production server
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+          APP_PATH: ${{ vars.OPC_APP_PATH }}
+          PUBLIC_URL: ${{ vars.OPC_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/opc_deploy \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            bash -s -- "$APP_PATH" <<'REMOTE'
+          set -e
+
+          APP_PATH="$1"
+          CONFIG="$HOME/.opc-deploy/production.env"
+
+          test -d "$APP_PATH"
+          test -f "$CONFIG"
+          test "$(stat -c '%a' "$CONFIG")" = "600"
+
+          source "$CONFIG"
+
+          test -n "${DATABASE_URL:-}"
+          test -n "${SESSION_SECRET:-}"
+
+          echo "OPC_PRODUCTION_CONFIG_READY"
+
+          test -d "$HOME/opc-backups"
+
+          echo "OPC_BACKUP_DIRECTORY_READY"
+          echo "OPC_SERVER_PREFLIGHT_SUCCESS"
+          REMOTE
+
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 30 "$PUBLIC_URL/login")
+
+          echo "LOGIN_HTTP_STATUS=$STATUS"
+          test "$STATUS" = "200"
+
+          echo "OPC_DEPLOYMENT_PREFLIGHT_SUCCESS"
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/opc_deploy
