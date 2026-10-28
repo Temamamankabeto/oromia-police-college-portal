@@ -1,79 +1,83 @@
 name: OPC Production Deployment
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: opc-production-deployment
+  group: opc-production
   cancel-in-progress: false
 
 jobs:
-  preflight:
-    name: Verify production deployment readiness
+  deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 30
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate application
+        run: |
+          npx tsc --noEmit
+          npm run lint
+          npm run build
+
+      - name: Package release
+        run: |
+          mkdir -p release/.next
+          cp -a .next/standalone/. release/
+          cp -a .next/static release/.next/static
+          cp -a public release/public
+          mkdir -p release/scripts release/database
+          cp scripts/migrate.mjs release/scripts/
+          cp -a database/migrations release/database/
+          printf '%s\n' "$GITHUB_SHA" > release/.opc-release-id
+          tar -czf opc-release.tar.gz -C release .
+
       - name: Configure SSH
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+          SSH_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
         run: |
-          set -euo pipefail
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/opc_deploy
-          chmod 600 ~/.ssh/opc_deploy
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Verify production server
+      - name: Upload release
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+        run: |
+          scp -o StrictHostKeyChecking=yes \
+            opc-release.tar.gz \
+            scripts/deploy-production.sh \
+            "$SSH_USER@$SSH_HOST:~/.opc-deploy/"
+
+      - name: Deploy to production
         env:
           SSH_HOST: ${{ vars.OPC_SSH_HOST }}
           SSH_USER: ${{ vars.OPC_SSH_USER }}
           APP_PATH: ${{ vars.OPC_APP_PATH }}
-          PUBLIC_URL: ${{ vars.OPC_PUBLIC_URL }}
         run: |
-          set -euo pipefail
-
-          ssh -i ~/.ssh/opc_deploy \
-            -o IdentitiesOnly=yes \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+          ssh -o StrictHostKeyChecking=yes \
             "$SSH_USER@$SSH_HOST" \
-            bash -s -- "$APP_PATH" <<'REMOTE'
-          set -e
-
-          APP_PATH="$1"
-          CONFIG="$HOME/.opc-deploy/production.env"
-
-          test -d "$APP_PATH"
-          test -f "$CONFIG"
-          test "$(stat -c '%a' "$CONFIG")" = "600"
-
-          source "$CONFIG"
-
-          test -n "${DATABASE_URL:-}"
-          test -n "${SESSION_SECRET:-}"
-
-          echo "OPC_PRODUCTION_CONFIG_READY"
-
-          test -d "$HOME/opc-backups"
-
-          echo "OPC_BACKUP_DIRECTORY_READY"
-          echo "OPC_SERVER_PREFLIGHT_SUCCESS"
-          REMOTE
-
-          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-            --max-time 30 "$PUBLIC_URL/login")
-
-          echo "LOGIN_HTTP_STATUS=$STATUS"
-          test "$STATUS" = "200"
-
-          echo "OPC_DEPLOYMENT_PREFLIGHT_SUCCESS"
-
-      - name: Remove SSH key
-        if: always()
-        run: rm -f ~/.ssh/opc_deploy
+            "OPC_ENABLE_DEPLOYMENT=YES bash \$HOME/.opc-deploy/deploy-production.sh '$APP_PATH' \$HOME/.opc-deploy/opc-release.tar.gz '$GITHUB_SHA'"

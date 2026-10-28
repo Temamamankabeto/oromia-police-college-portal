@@ -1,13 +1,19 @@
-import SectionPage from "@/components/portal/section-page";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import DashboardShell from "@/components/portal/dashboard-shell";
+import DataTableManager from "@/components/portal/data-table-manager";
 
 export const dynamic = "force-dynamic";
 
-export default function Page() {
+export default async function AuditPage() {
+  const user = await getCurrentUser();
+
+  if (!user) redirect("/login");
+  if (user.role_code !== "ADMIN") redirect("/dashboard");
+
   return (
-    <SectionPage
-      title="Audit History"
-      description="Review recorded system activities and changes."
-      allowedRoles={["ADMIN"]}
-    />
+    <DashboardShell>
+      <DataTableManager mode="audit" />
+    </DashboardShell>
   );
 }

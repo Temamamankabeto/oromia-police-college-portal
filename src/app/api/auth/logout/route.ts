@@ -8,9 +8,13 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
-  const expectedOrigin = "https://opc.osdavc.com";
+  const allowedOrigins = ["https://opc.osdavc.com"];
 
-  if (!origin || origin !== expectedOrigin) {
+  if (process.env.NODE_ENV === "development") {
+    allowedOrigins.push("http://127.0.0.1:3000");
+  }
+
+  if (!origin || !allowedOrigins.includes(origin)) {
     return NextResponse.json(
       {
         success: false,

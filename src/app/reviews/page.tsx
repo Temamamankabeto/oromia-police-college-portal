@@ -1,13 +1,20 @@
-import SectionPage from "@/components/portal/section-page";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import DashboardShell from "@/components/portal/dashboard-shell";
+import ReviewsManager from "@/components/portal/reviews-manager";
 
 export const dynamic = "force-dynamic";
 
-export default function Page() {
+export default async function ReviewsPage() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
-    <SectionPage
-      title="Proposal Reviews"
-      description="Review proposals, submit comments, and track corrections."
-      allowedRoles={["ADMIN", "REVIEWER", "APPROVER"]}
-    />
+    <DashboardShell>
+      <ReviewsManager role={user.role_code} />
+    </DashboardShell>
   );
 }

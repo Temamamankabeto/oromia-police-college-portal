@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Browser testing artifacts
+/test-results/
+/playwright-report/
+
+# Local test credentials
+/.opc-test-users.local.json

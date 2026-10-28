@@ -1,13 +1,18 @@
-import SectionPage from "@/components/portal/section-page";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import DashboardShell from "@/components/portal/dashboard-shell";
+import DataTableManager from "@/components/portal/data-table-manager";
 
 export const dynamic = "force-dynamic";
 
-export default function Page() {
+export default async function ReportsPage() {
+  const user = await getCurrentUser();
+
+  if (!user) redirect("/login");
+
   return (
-    <SectionPage
-      title="Reports"
-      description="Monitor institutional modules and proposal review progress."
-      allowedRoles={["ADMIN", "REVIEWER", "APPROVER"]}
-    />
+    <DashboardShell>
+      <DataTableManager mode="reports" />
+    </DashboardShell>
   );
 }
