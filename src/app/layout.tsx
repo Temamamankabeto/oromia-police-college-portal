@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Oromia Police College | Proposal Review Portal",
-  description: "Institutional Proposal Review and Approval Portal",
+  title: "Oromia Police College | Requirements Gathering and Approval Portal",
+  description: "Institutional Requirements Gathering and Approval Portal",
 };
 
 export default function RootLayout({

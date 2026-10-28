@@ -149,7 +149,7 @@ export default function DashboardShell({
               Oromia Police College
             </h1>
             <p className="text-xs text-slate-500">
-              Proposal Review Portal
+              Requirements Gathering and Approval Portal
             </p>
           </div>
         </div>

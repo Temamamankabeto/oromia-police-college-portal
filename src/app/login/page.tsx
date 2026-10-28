@@ -51,7 +51,7 @@ export default function LoginPage() {
             Oromia Police College
           </h1>
           <p className="mt-2 text-sm text-blue-100">
-            Proposal Review and Approval Portal
+            Requirements Gathering and Approval Portal
           </p>
         </div>
 
