@@ -1,0 +1,51 @@
+
+name: OPC Production Deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opc-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  verify-connection:
+    name: Verify production SSH access
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/opc_deploy
+          chmod 600 ~/.ssh/opc_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify server connection
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+          APP_PATH: ${{ vars.OPC_APP_PATH }}
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/opc_deploy \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "test -d '$APP_PATH' && echo OPC_SSH_CONNECTED"
+
+      - name: Clean up SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/opc_deploy
