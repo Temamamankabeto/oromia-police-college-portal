@@ -163,9 +163,30 @@ with tarfile.open(archive, "r:gz") as tar:
         if (
             path.is_absolute()
             or ".." in path.parts
-            or not (member.isfile() or member.isdir())
+            or not (
+                member.isfile()
+                or member.isdir()
+                or member.issym()
+            )
         ):
             raise SystemExit(f"Unsafe archive entry: {member.name}")
+
+        if member.issym():
+            target = pathlib.PurePosixPath(member.linkname)
+
+            if target.is_absolute():
+                raise SystemExit(
+                    f"Unsafe absolute symlink: {member.name}"
+                )
+
+            resolved = (root / path.parent / target).resolve(
+                strict=False
+            )
+
+            if not resolved.is_relative_to(root.resolve()):
+                raise SystemExit(
+                    f"Unsafe symlink target: {member.name}"
+                )
 
     tar.extractall(root, members=members, filter="data")
 PY
