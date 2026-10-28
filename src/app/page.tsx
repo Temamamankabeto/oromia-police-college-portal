@@ -10,7 +10,7 @@ export default function Home() {
               Oromia Police College
             </h1>
             <p className="text-sm text-slate-500">
-              Proposal Review and Approval Portal
+              Requirements Gathering and Approval Portal
             </p>
           </div>
 
@@ -26,18 +26,18 @@ export default function Home() {
       <section className="mx-auto grid max-w-7xl gap-10 px-6 py-20 lg:grid-cols-2 lg:items-center">
         <div>
           <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-medium text-blue-900">
-            Institutional Proposal Management
+            Institutional Requirements Management
           </span>
 
           <h2 className="mt-7 text-4xl font-bold leading-tight text-blue-950 md:text-5xl">
-            Digital Proposal Review and Approval System
+            Digital Requirements Gathering and Approval System
           </h2>
 
           <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-            A centralized platform for managing institutional
-            proposals, reviewing module activities, providing
-            comments, tracking revisions, and approving
-            proposals through a structured workflow.
+            A centralized digital platform for gathering institutional
+            requirements, reviewing submissions, providing
+            feedback, tracking revisions, and approving
+            requirements through a structured workflow.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
@@ -65,11 +65,11 @@ export default function Home() {
           <div className="mt-8 space-y-5">
             {[
               "32 Institutional Modules",
-              "Activity and Proposal Management",
-              "Reviewer Comments and Feedback",
-              "Revision Tracking",
-              "Approval Workflow",
-              "Management Reports and Audit History",
+              "Requirements Collection and Management",
+              "Requirements Review and Feedback",
+              "Requirements Revision Tracking",
+              "Requirements Approval Workflow",
+              "Requirements Reports and Audit History",
             ].map((feature) => (
               <div
                 key={feature}
@@ -86,7 +86,7 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-slate-200 bg-white px-6 py-6 text-center text-sm text-slate-500">
-        Oromia Police College — Proposal Review and Approval Portal
+        Oromia Police College — Requirements Gathering and Approval Portal
       </footer>
     </main>
   );
