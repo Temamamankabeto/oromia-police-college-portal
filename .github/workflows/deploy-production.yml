@@ -12,8 +12,8 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
 
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -36,7 +36,7 @@ jobs:
           npm run lint
           npm run build
 
-      - name: Package standalone release
+      - name: Package release
         run: |
           mkdir -p release/.next
           cp -a .next/standalone/. release/
@@ -45,6 +45,7 @@ jobs:
           mkdir -p release/scripts release/database
           cp scripts/migrate.mjs release/scripts/
           cp -a database/migrations release/database/
+          printf '%s\\n' "$GITHUB_SHA" > release/.opc-release-id
           tar -czf opc-release.tar.gz -C release .
 
       - name: Configure SSH
@@ -53,27 +54,27 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Upload deployment files
+      - name: Upload release
         env:
           SSH_HOST: ${{ vars.OPC_SSH_HOST }}
           SSH_USER: ${{ vars.OPC_SSH_USER }}
         run: |
-          scp -o StrictHostKeyChecking=yes \
-            opc-release.tar.gz \
-            scripts/deploy-production.sh \
+          scp -o StrictHostKeyChecking=yes \\
+            opc-release.tar.gz \\
+            scripts/deploy-production.sh \\
             "$SSH_USER@$SSH_HOST:~/.opc-deploy/"
 
-      - name: Execute deployment
+      - name: Deploy to production
         env:
           SSH_HOST: ${{ vars.OPC_SSH_HOST }}
           SSH_USER: ${{ vars.OPC_SSH_USER }}
           APP_PATH: ${{ vars.OPC_APP_PATH }}
         run: |
-          ssh -o StrictHostKeyChecking=yes \
-            "$SSH_USER@$SSH_HOST" \
-            "bash ~/.opc-deploy/deploy-production.sh '$APP_PATH' ~/.opc-deploy/opc-release.tar.gz"
+          ssh -o StrictHostKeyChecking=yes \\
+            "$SSH_USER@$SSH_HOST" \\
+            "OPC_ENABLE_DEPLOYMENT=YES bash \\$HOME/.opc-deploy/deploy-production.sh '$APP_PATH' \\$HOME/.opc-deploy/opc-release.tar.gz '$GITHUB_SHA'"
