@@ -260,10 +260,11 @@ echo "=== VERIFYING PRODUCTION HEALTH ==="
 healthy=0
 
 for attempt in $(seq 1 12); do
-  code="$(curl -L -sS -o /dev/null -w '%{http_code}' \
-    --max-time 10 "$PUBLIC_URL/login" || true)"
+  release_response="$(curl -fsS --max-time 10 \
+    -H 'Cache-Control: no-cache' \
+    "$PUBLIC_URL/api/deployment-health" || true)"
 
-  if [[ "$code" == "200" ]]; then
+  if [[ "$release_response" == *'"release":"'"$EXPECTED_SHA"'"'* ]]; then
     healthy=1
     break
   fi
@@ -272,7 +273,7 @@ for attempt in $(seq 1 12); do
 done
 
 (( healthy == 1 )) ||
-  die "Production health check failed"
+  die "Production release identity verification failed"
 
 ACTIVATION_COMPLETE=1
 
