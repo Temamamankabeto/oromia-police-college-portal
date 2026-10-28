@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PublicRequirementsExplorer from "@/components/portal/public-requirements-explorer";
 
 export default function Home() {
   return (
@@ -57,32 +58,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="rounded-3xl bg-gradient-to-br from-blue-950 to-blue-700 p-10 text-white shadow-xl">
-          <h3 className="text-2xl font-bold">
-            Portal Capabilities
-          </h3>
-
-          <div className="mt-8 space-y-5">
-            {[
-              "32 Institutional Modules",
-              "Requirements Collection and Management",
-              "Requirements Review and Feedback",
-              "Requirements Revision Tracking",
-              "Requirements Approval Workflow",
-              "Requirements Reports and Audit History",
-            ].map((feature) => (
-              <div
-                key={feature}
-                className="flex items-center gap-3 rounded-xl bg-white/10 p-4"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20">
-                  ✓
-                </span>
-                <span className="font-medium">{feature}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PublicRequirementsExplorer />
       </section>
 
       <footer className="border-t border-slate-200 bg-white px-6 py-6 text-center text-sm text-slate-500">
