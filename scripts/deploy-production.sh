@@ -77,6 +77,14 @@ on_error() {
 }
 
 trap on_error ERR
+on_exit() {
+  local status=$?
+  trap - ERR EXIT
+  if (( status != 0 )); then
+    on_error "$status"
+  fi
+}
+trap on_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
