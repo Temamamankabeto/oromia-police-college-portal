@@ -1,0 +1,52 @@
+name: OPC Production Backup Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify existing production backup
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_USER"
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          BACKUP="$HOME/opc-backups/20261031T065240Z-1474723/database/production.dump"
+
+          test -f "$BACKUP"
+          test -r "$BACKUP"
+          test -s "$BACKUP"
+
+          echo "=== BACKUP METADATA ==="
+          stat -c 'Size: %s bytes' "$BACKUP"
+          sha256sum "$BACKUP"
+
+          echo "=== POSTGRESQL ARCHIVE VERIFICATION ==="
+          pg_restore --list "$BACKUP" >/dev/null
+
+          echo "PRODUCTION_BACKUP_FILE_VERIFIED"
+          REMOTE
