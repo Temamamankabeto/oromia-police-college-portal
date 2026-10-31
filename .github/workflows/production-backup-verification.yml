@@ -24,7 +24,7 @@ jobs:
 
       - name: Verify existing production backup
         env:
-          SSH_HOST: 91.204.209.46
+          SSH_HOST: sagittarius.premium.hostns.io
           SSH_USER: osdavcax
         run: |
           set -euo pipefail
