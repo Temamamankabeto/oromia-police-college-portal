@@ -20,7 +20,7 @@ type LoginUser = {
   email: string;
   password_hash: string;
   session_version: number;
-  role_code: "ADMIN" | "REVIEWER" | "APPROVER";
+  role_code: "ADMIN" | "DEVELOPER" | "REVIEWER" | "APPROVER" | "TESTER";
 };
 
 export async function POST(request: NextRequest) {
@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
   const allowedOrigins = ["https://opc.osdavc.com"];
 
   if (process.env.NODE_ENV === "development") {
-    allowedOrigins.push("http://127.0.0.1:3000");
+    allowedOrigins.push(
+      "http://127.0.0.1:3000",
+      "http://localhost:3000"
+    );
   }
 
   if (!origin || !allowedOrigins.includes(origin)) {
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
       WHERE LOWER(u.email) = $1
         AND u.is_active = TRUE
         AND u.deleted_at IS NULL
-        AND r.role_code IN ('ADMIN', 'REVIEWER', 'APPROVER')
+        AND r.role_code IN ('ADMIN', 'DEVELOPER', 'REVIEWER', 'APPROVER', 'TESTER')
       LIMIT 1
       `,
       [email]

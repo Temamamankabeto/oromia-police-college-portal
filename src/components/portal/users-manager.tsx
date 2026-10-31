@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Role = "ADMIN" | "REVIEWER" | "APPROVER";
+type Role = "ADMIN" | "DEVELOPER" | "REVIEWER" | "APPROVER" | "TESTER";
 
 type User = {
   id: string;
@@ -376,8 +376,10 @@ export default function UsersManager({
                 }
               >
                 <option value="ADMIN">Administrator</option>
+                <option value="DEVELOPER">Developer</option>
                 <option value="REVIEWER">Reviewer</option>
                 <option value="APPROVER">Approver</option>
+                <option value="TESTER">Tester</option>
               </select>
             </label>
 

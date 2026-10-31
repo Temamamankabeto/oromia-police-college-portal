@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
     origin !== "https://opc.osdavc.com" &&
     !(
       process.env.NODE_ENV === "development" &&
-      origin === "http://127.0.0.1:3000"
+      (origin === "http://127.0.0.1:3000" ||
+        origin === "http://localhost:3000")
     )
   ) {
     return fail("Invalid request origin", 403);
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
     return fail("Password must contain 12–128 characters", 400);
   }
 
-  if (!["ADMIN", "REVIEWER", "APPROVER"].includes(role)) {
+  if (!["ADMIN", "DEVELOPER", "REVIEWER", "APPROVER", "TESTER"].includes(role)) {
     return fail("Invalid user role", 400);
   }
 

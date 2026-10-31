@@ -46,3 +46,5 @@ next-env.d.ts
 
 # Local test credentials
 /.opc-test-users.local.json
+
+.opc-dev-users.local.json

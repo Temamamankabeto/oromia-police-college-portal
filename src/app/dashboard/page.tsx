@@ -20,8 +20,10 @@ type Stats = {
 
 const roleTitles = {
   ADMIN: "Administration Dashboard",
+  DEVELOPER: "Developer Dashboard",
   REVIEWER: "Reviewer Dashboard",
   APPROVER: "Approver Dashboard",
+  TESTER: "Tester Dashboard",
 };
 
 export default async function DashboardPage() {

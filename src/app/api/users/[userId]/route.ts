@@ -33,7 +33,8 @@ export async function PATCH(
     origin !== "https://opc.osdavc.com" &&
     !(
       process.env.NODE_ENV === "development" &&
-      origin === "http://127.0.0.1:3000"
+      (origin === "http://127.0.0.1:3000" ||
+        origin === "http://localhost:3000")
     )
   ) {
     return fail("Invalid request origin", 403);
@@ -104,7 +105,7 @@ export async function PATCH(
 
   if (
     input.role_code !== undefined &&
-    !["ADMIN", "REVIEWER", "APPROVER"].includes(
+    !["ADMIN", "DEVELOPER", "REVIEWER", "APPROVER", "TESTER"].includes(
       String(input.role_code)
     )
   ) {
@@ -131,6 +132,10 @@ export async function PATCH(
 
   try {
     await client.query("BEGIN");
+
+    // Serialize administrator role/status changes to protect
+    // the final active administrator against concurrent updates.
+    await client.query("SELECT pg_advisory_xact_lock(20261030, 281)");
 
     const existingResult = await client.query(
       `SELECT
@@ -175,6 +180,26 @@ export async function PATCH(
       );
     }
 
+    if (
+      existing.role_code === "ADMIN" &&
+      existing.is_active &&
+      (roleCode !== "ADMIN" || !isActive)
+    ) {
+      const adminCountResult = await client.query(
+        `SELECT COUNT(*)::integer AS total
+         FROM app_users u
+         JOIN app_roles r ON r.id = u.role_id
+         WHERE r.role_code = 'ADMIN'
+           AND u.is_active = TRUE
+           AND u.deleted_at IS NULL`
+      );
+
+      if (adminCountResult.rows[0].total <= 1) {
+        await client.query("ROLLBACK");
+        return fail("Cannot deactivate or demote the last active administrator", 409);
+      }
+    }
+
     const roleResult = await client.query(
       `SELECT id FROM app_roles WHERE role_code = $1`,
       [roleCode]
@@ -210,6 +235,8 @@ export async function PATCH(
          password_hash = COALESCE($6::text, password_hash),
          session_version = CASE
            WHEN $6::text IS NOT NULL
+             OR role_id IS DISTINCT FROM $4
+             OR is_active IS DISTINCT FROM $5
            THEN session_version + 1
            ELSE session_version
          END,
