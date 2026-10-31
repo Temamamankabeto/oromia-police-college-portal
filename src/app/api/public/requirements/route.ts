@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -24,6 +24,7 @@ type PublicRow = {
   acceptance_criteria: string | null;
   priority: string;
   lifecycle_status: string;
+  approval_status: string;
 };
 
 type Requirement = {
@@ -79,7 +80,7 @@ export async function GET() {
         r.id::text AS requirement_id, r.requirement_code,
         r.title AS requirement_title, r.description AS requirement_description,
         r.acceptance_criteria, r.priority,
-        l.lifecycle_status
+        l.lifecycle_status, r.status AS approval_status
       FROM activity_functional_requirements r
       INNER JOIN requirement_lifecycle l ON l.requirement_id = r.id
       INNER JOIN module_activities a ON a.id = r.activity_id AND a.module_id = r.module_id
@@ -89,8 +90,6 @@ export async function GET() {
         AND m.deleted_at IS NULL AND m.is_active = TRUE
         AND a.deleted_at IS NULL AND a.is_active = TRUE
         AND r.deleted_at IS NULL AND r.is_active = TRUE
-        AND r.status = 'APPROVED'
-        AND l.lifecycle_status IN ('APPROVED', 'UNDER_DEVELOPING', 'DEVELOPED', 'DEPLOYED', 'TESTED')
       ORDER BY p.title, p.id, m.display_order, m.id,
                a.display_order, a.id, r.display_order, r.id
     `);
@@ -183,14 +182,16 @@ export async function GET() {
     }
 
     return NextResponse.json(
-      { success: true, message: "Published requirements loaded", data: [...projects.values()], meta: { total: projects.size } },
+      { success: true, message: "Requirements loaded", data: [...projects.values()], meta: { total: projects.size } },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     console.error("Public requirements loading failed:", error);
     return NextResponse.json(
-      { success: false, message: "Unable to load published requirements", data: [], meta: {} },
+      { success: false, message: "Unable to load requirements", data: [], meta: {} },
       { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
+
+
