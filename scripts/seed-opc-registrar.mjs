@@ -57,37 +57,37 @@ function validateCatalog(data) {
   let activityCount = 0;
   let requirementCount = 0;
 
-  for (const [moduleIndex, module] of data.modules.entries()) {
+  for (const [moduleIndex, moduleRecord] of data.modules.entries()) {
     const expectedModuleCode =
       `OPC-M${String(moduleIndex + 1).padStart(2, "0")}`;
 
     assert(
-      module.module_code === expectedModuleCode,
-      `Unexpected module code: ${module.module_code}`
+      moduleRecord.module_code === expectedModuleCode,
+      `Unexpected module code: ${moduleRecord.module_code}`
     );
 
     assert(
-      !moduleCodes.has(module.module_code),
-      `Duplicate module: ${module.module_code}`
+      !moduleCodes.has(moduleRecord.module_code),
+      `Duplicate module: ${moduleRecord.module_code}`
     );
 
-    moduleCodes.add(module.module_code);
+    moduleCodes.add(moduleRecord.module_code);
 
-    nonEmpty(module.title, 255, "module title");
-    nonEmpty(module.description, 5000, "module description");
+    nonEmpty(moduleRecord.title, 255, "module title");
+    nonEmpty(moduleRecord.description, 5000, "module description");
 
     assert(
-      module.display_order === moduleIndex + 1,
-      `Invalid module order: ${module.module_code}`
+      moduleRecord.display_order === moduleIndex + 1,
+      `Invalid module order: ${moduleRecord.module_code}`
     );
 
-    const objective = module.objective;
+    const objective = moduleRecord.objective;
 
     assert(
       objective &&
         objective.objective_code ===
-          `${module.module_code}-OBJ001`,
-      `Invalid objective: ${module.module_code}`
+          `${moduleRecord.module_code}-OBJ001`,
+      `Invalid objective: ${moduleRecord.module_code}`
     );
 
     assert(
@@ -101,15 +101,15 @@ function validateCatalog(data) {
     nonEmpty(objective.description, 10000, "objective description");
 
     assert(
-      Array.isArray(module.activities) &&
-        module.activities.length === 5,
-      `Expected five activities in ${module.module_code}`
+      Array.isArray(moduleRecord.activities) &&
+        moduleRecord.activities.length === 5,
+      `Expected five activities in ${moduleRecord.module_code}`
     );
 
     for (const [activityIndex, activity] of
-      module.activities.entries()) {
+      moduleRecord.activities.entries()) {
       const expectedActivityCode =
-        `${module.module_code}-A${String(activityIndex + 1).padStart(2, "0")}`;
+        `${moduleRecord.module_code}-A${String(activityIndex + 1).padStart(2, "0")}`;
 
       assert(
         activity.activity_code === expectedActivityCode,
@@ -252,7 +252,7 @@ try {
     `SELECT module_code
      FROM institutional_modules
      WHERE module_code = ANY($1::text[])`,
-    [catalog.modules.map((module) => module.module_code)]
+    [catalog.modules.map((moduleRecord) => moduleRecord.module_code)]
   );
 
   assert(
@@ -276,7 +276,7 @@ try {
   const projectId = projectResult.rows[0].id;
   counts.projects++;
 
-  for (const module of catalog.modules) {
+  for (const moduleRecord of catalog.modules) {
     const moduleResult = await client.query(
       `INSERT INTO institutional_modules
          (project_id, module_code, title, description, display_order)
@@ -284,10 +284,10 @@ try {
        RETURNING id`,
       [
         projectId,
-        module.module_code,
-        module.title,
-        module.description,
-        module.display_order
+        moduleRecord.module_code,
+        moduleRecord.title,
+        moduleRecord.description,
+        moduleRecord.display_order
       ]
     );
 
@@ -300,16 +300,16 @@ try {
        VALUES ($1, $2, $3, $4, $5)`,
       [
         moduleId,
-        module.objective.objective_code,
-        module.objective.title,
-        module.objective.description,
+        moduleRecord.objective.objective_code,
+        moduleRecord.objective.title,
+        moduleRecord.objective.description,
         1
       ]
     );
 
     counts.objectives++;
 
-    for (const activity of module.activities) {
+    for (const activity of moduleRecord.activities) {
       const activityResult = await client.query(
         `INSERT INTO module_activities
            (module_id, activity_code, title, description, display_order)
