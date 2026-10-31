@@ -45,9 +45,11 @@ jobs:
           cp -a .next/standalone/. release/
           cp -a .next/static release/.next/static
           cp -a public release/public
-          mkdir -p release/scripts release/database
+          mkdir -p release/scripts release/database/seeds
           cp scripts/migrate.mjs release/scripts/
+          cp scripts/seed-opc-registrar.mjs release/scripts/
           cp -a database/migrations release/database/
+          cp database/seeds/opc-registrar.json release/database/seeds/
           printf '%s\n' "$GITHUB_SHA" > release/.opc-release-id
           tar -czf opc-release.tar.gz -C release .
 
