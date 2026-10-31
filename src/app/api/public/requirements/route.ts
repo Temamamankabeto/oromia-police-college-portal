@@ -177,7 +177,7 @@ export async function GET() {
         id: row.requirement_id, code: row.requirement_code,
         title: row.requirement_title, description: row.requirement_description,
         acceptanceCriteria: row.acceptance_criteria, priority: row.priority,
-        status: row.approval_status,
+        status: row.lifecycle_status,
       });
     }
 
@@ -193,4 +193,5 @@ export async function GET() {
     );
   }
 }
+
 
