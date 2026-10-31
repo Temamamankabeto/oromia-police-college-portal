@@ -126,6 +126,107 @@ jobs:
               console.table(counts.rows);
             }
 
+            console.log("=== PROJECT OWNERSHIP INVENTORY ===");
+
+            const projects = await client.query(`
+              SELECT
+                p.id,
+                p.project_code,
+                p.title,
+                p.status,
+                p.deleted_at,
+                (
+                  SELECT COUNT(*)::integer
+                  FROM institutional_modules m
+                  WHERE m.project_id = p.id
+                ) AS modules,
+                (
+                  SELECT COUNT(*)::integer
+                  FROM module_activities a
+                  JOIN institutional_modules m ON m.id = a.module_id
+                  WHERE m.project_id = p.id
+                ) AS activities,
+                (
+                  SELECT COUNT(*)::integer
+                  FROM activity_functional_requirements r
+                  JOIN institutional_modules m ON m.id = r.module_id
+                  WHERE m.project_id = p.id
+                ) AS requirements,
+                (
+                  SELECT COUNT(*)::integer
+                  FROM requirement_workflow_events e
+                  JOIN activity_functional_requirements r
+                    ON r.id = e.requirement_id
+                  JOIN institutional_modules m ON m.id = r.module_id
+                  WHERE m.project_id = p.id
+                ) AS workflow_events
+              FROM projects p
+              ORDER BY p.id
+            `);
+
+            console.table(projects.rows);
+
+            console.log("=== PROJECT FOREIGN KEY DEPENDENCIES ===");
+
+            const foreignKeys = await client.query(`
+              SELECT
+                source.relname AS referencing_table,
+                target.relname AS referenced_table,
+                pg_get_constraintdef(c.oid) AS definition
+              FROM pg_constraint c
+              JOIN pg_class source ON source.oid = c.conrelid
+              JOIN pg_class target ON target.oid = c.confrelid
+              JOIN pg_namespace ns ON ns.oid = source.relnamespace
+              WHERE c.contype = 'f'
+                AND ns.nspname = 'public'
+              ORDER BY target.relname, source.relname
+            `);
+
+            const roots = new Set([
+              "projects",
+              "institutional_modules",
+              "module_activities",
+              "module_objectives",
+              "activity_functional_requirements"
+            ]);
+
+            let changed = true;
+
+            while (changed) {
+              changed = false;
+
+              for (const fk of foreignKeys.rows) {
+                if (
+                  roots.has(fk.referenced_table) &&
+                  !roots.has(fk.referencing_table)
+                ) {
+                  roots.add(fk.referencing_table);
+                  changed = true;
+                }
+              }
+            }
+
+            const dependencies = foreignKeys.rows.filter(
+              fk => roots.has(fk.referenced_table)
+            );
+
+            console.table(dependencies);
+            console.log("RELATED_TABLE_COUNT:", roots.size);
+            console.log("FOREIGN_KEY_COUNT:", dependencies.length);
+
+            console.log("=== AUDIT LOG CLASSIFICATION ===");
+
+            const audits = await client.query(`
+              SELECT
+                entity_type,
+                action,
+                COUNT(*)::integer AS records
+              FROM audit_logs
+              GROUP BY entity_type, action
+              ORDER BY entity_type, action
+            `);
+
+            console.table(audits.rows);
             await client.query("COMMIT");
             console.log("PRODUCTION_DATABASE_INSPECTION_COMPLETE");
           } catch (error) {
