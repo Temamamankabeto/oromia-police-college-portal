@@ -1,0 +1,140 @@
+name: OPC Production Database Inspection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.OPC_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OPC_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Inspect production database
+        env:
+          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
+          SSH_USER: ${{ vars.OPC_SSH_USER }}
+        run: |
+          set -euo pipefail
+
+          test -n "$SSH_HOST"
+          test -n "$SSH_USER"
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          cd "$HOME/opc-portal"
+
+          set -a
+          source "$HOME/.opc-deploy/production.env"
+          set +a
+
+          "$HOME/nodevenv/opc-portal/22/bin/node" --input-type=module <<'JS'
+          import pg from "pg";
+
+          const pool = new pg.Pool({
+            connectionString: process.env.DATABASE_URL,
+            max: 1,
+          });
+
+          const client = await pool.connect();
+
+          try {
+            await client.query("BEGIN READ ONLY");
+
+            const migrationsTable = await client.query(`
+              SELECT to_regclass('public.schema_migrations') IS NOT NULL
+                AS exists
+            `);
+
+            console.log("=== SCHEMA MIGRATIONS ===");
+
+            if (migrationsTable.rows[0].exists) {
+              const migrations = await client.query(`
+                SELECT version, applied_at
+                FROM public.schema_migrations
+                ORDER BY version
+              `);
+              console.table(migrations.rows);
+            } else {
+              console.log("schema_migrations table does not exist");
+            }
+
+            console.log("=== REQUIRED TABLES ===");
+
+            const tables = await client.query(`
+              SELECT
+                t.table_name,
+                EXISTS (
+                  SELECT 1
+                  FROM information_schema.tables x
+                  WHERE x.table_schema = 'public'
+                    AND x.table_name = t.table_name
+                ) AS exists
+              FROM (
+                VALUES
+                  ('app_users'),
+                  ('app_roles'),
+                  ('institutional_modules'),
+                  ('module_activities'),
+                  ('activity_functional_requirements'),
+                  ('projects'),
+                  ('project_members'),
+                  ('requirement_assignments'),
+                  ('requirement_lifecycle'),
+                  ('requirement_review_comments'),
+                  ('requirement_corrections'),
+                  ('requirement_versions')
+              ) AS t(table_name)
+              ORDER BY t.table_name
+            `);
+
+            console.table(tables.rows);
+
+            console.log("=== EXISTING MODULE COUNTS ===");
+
+            const modulesExist = tables.rows.some(
+              row => row.table_name === "institutional_modules" && row.exists
+            );
+
+            if (modulesExist) {
+              const counts = await client.query(`
+                SELECT
+                  COUNT(*)::integer AS total_modules,
+                  COUNT(*) FILTER (
+                    WHERE deleted_at IS NULL
+                  )::integer AS active_modules
+                FROM institutional_modules
+              `);
+
+              console.table(counts.rows);
+            }
+
+            await client.query("COMMIT");
+            console.log("PRODUCTION_DATABASE_INSPECTION_COMPLETE");
+          } catch (error) {
+            await client.query("ROLLBACK");
+            console.error("Inspection failed:", error.message);
+            process.exitCode = 1;
+          } finally {
+            client.release();
+            await pool.end();
+          }
+          JS
+          REMOTE
