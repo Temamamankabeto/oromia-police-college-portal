@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentUser, type UserRole } from "@/lib/auth/current-user";
 import DashboardShell from "@/components/portal/dashboard-shell";
 
-type Role = "ADMIN" | "REVIEWER" | "APPROVER";
+
 
 type Props = {
   title: string;
   description: string;
-  allowedRoles: Role[];
+  allowedRoles: UserRole[];
 };
 
 export default async function SectionPage({

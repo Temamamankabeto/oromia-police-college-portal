@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type Role = "ADMIN" | "REVIEWER" | "APPROVER";
+type Role =
+  | "ADMIN"
+  | "DEVELOPER"
+  | "REVIEWER"
+  | "APPROVER"
+  | "TESTER";
 
 type User = {
   id: string;
@@ -26,19 +31,39 @@ const menu: MenuItem[] = [
     roles: ["ADMIN", "REVIEWER", "APPROVER"],
   },
   {
-    label: "Institutional Modules",
-    href: "/modules",
-    roles: ["ADMIN", "REVIEWER", "APPROVER"],
+    label: "My Development Requirements",
+    href: "/developer/requirements",
+    roles: ["DEVELOPER"],
+  },
+  {
+    label: "My Corrections",
+    href: "/developer/corrections",
+    roles: ["DEVELOPER"],
+  },
+  {
+    label: "Project Management",
+    href: "/projects",
+    roles: ["ADMIN"],
   },
   {
     label: "Proposal Reviews",
     href: "/reviews",
-    roles: ["ADMIN", "REVIEWER", "APPROVER"],
+    roles: [],
+  },
+  {
+    label: "Functional Requirement Reviews",
+    href: "/requirement-reviews",
+    roles: ["REVIEWER"],
   },
   {
     label: "Approvals",
     href: "/approvals",
-    roles: ["ADMIN", "APPROVER"],
+    roles: [],
+  },
+  {
+    label: "Functional Requirement Approvals",
+    href: "/requirement-approvals",
+    roles: ["APPROVER"],
   },
   {
     label: "User Management",
@@ -48,7 +73,7 @@ const menu: MenuItem[] = [
   {
     label: "Reports",
     href: "/reports",
-    roles: ["ADMIN", "REVIEWER", "APPROVER"],
+    roles: ["ADMIN"],
   },
   {
     label: "Audit History",
@@ -141,7 +166,7 @@ export default function DashboardShell({
             className="rounded-lg border border-slate-300 px-3 py-2 md:hidden"
             aria-label="Toggle navigation"
           >
-            ☰
+            â˜°
           </button>
 
           <div>

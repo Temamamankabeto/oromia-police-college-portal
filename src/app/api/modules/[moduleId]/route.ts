@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { getPool, query } from "@/lib/db";
 import { requireRole } from "@/lib/auth/current-user";
 
 export const runtime = "nodejs";
@@ -39,7 +39,8 @@ function validOrigin(request: NextRequest) {
 
   return origin === "https://opc.osdavc.com" ||
     (process.env.NODE_ENV === "development" &&
-      origin === "http://127.0.0.1:3000");
+      (origin === "http://127.0.0.1:3000" ||
+        origin === "http://localhost:3000"));
 }
 
 async function authorize(request: NextRequest) {
@@ -216,8 +217,15 @@ export async function PATCH(request: NextRequest, context: Context) {
 
 export async function DELETE(request: NextRequest, context: Context) {
   try {
-    const denied = await authorize(request);
-    if (denied) return denied;
+    const user = await requireRole(["ADMIN"]);
+
+    if (!user) {
+      return response("Administrator access required", 403);
+    }
+
+    if (!validOrigin(request)) {
+      return response("Invalid request origin", 403);
+    }
 
     const { moduleId } = await context.params;
 
@@ -225,25 +233,118 @@ export async function DELETE(request: NextRequest, context: Context) {
       return response("Invalid module ID", 400);
     }
 
-    const result = await query<ModuleRow>(
-      `
-      UPDATE institutional_modules
-      SET deleted_at = NOW(), updated_at = NOW()
-      WHERE id = $1
-        AND deleted_at IS NULL
-      RETURNING ${fields}
-      `,
-      [moduleId]
-    );
+    const client = await getPool().connect();
 
-    if (!result.rows.length) {
-      return response("Module not found", 404);
+    try {
+      await client.query("BEGIN");
+
+      const previous = await client.query(
+        `
+        SELECT ${fields}, deleted_at
+        FROM institutional_modules
+        WHERE id = $1
+          AND deleted_at IS NULL
+        FOR UPDATE
+        `,
+        [moduleId]
+      );
+
+      if (!previous.rows.length) {
+        await client.query("ROLLBACK");
+        return response("Module not found", 404);
+      }
+
+      const dependencies = await client.query(
+        `
+        SELECT
+          EXISTS (
+            SELECT 1 FROM module_activities
+            WHERE module_id = $1
+          )
+          OR EXISTS (
+            SELECT 1 FROM module_objectives
+            WHERE module_id = $1
+          )
+          OR EXISTS (
+            SELECT 1 FROM activity_functional_requirements
+            WHERE module_id = $1
+          )
+          OR EXISTS (
+            SELECT 1 FROM module_reviews
+            WHERE module_id = $1
+          )
+          OR EXISTS (
+            SELECT 1 FROM module_comments
+            WHERE module_id = $1
+          )
+          OR EXISTS (
+            SELECT 1 FROM module_decisions
+            WHERE module_id = $1
+          )
+          OR EXISTS (
+            SELECT 1 FROM module_revisions
+            WHERE module_id = $1
+          ) AS has_dependencies
+        `,
+        [moduleId]
+      );
+
+      if (dependencies.rows[0]?.has_dependencies) {
+        await client.query("ROLLBACK");
+
+        return response(
+          "Module cannot be deleted because it contains activities, requirements, objectives, or workflow history",
+          409
+        );
+      }
+
+      const result = await client.query(
+        `
+        UPDATE institutional_modules
+        SET deleted_at = NOW(), updated_at = NOW()
+        WHERE id = $1
+          AND deleted_at IS NULL
+        RETURNING ${fields}, deleted_at
+        `,
+        [moduleId]
+      );
+
+      if (!result.rows.length) {
+        await client.query("ROLLBACK");
+        return response("Module not found", 404);
+      }
+
+      await client.query(
+        `
+        INSERT INTO audit_logs
+          (actor_id, action, entity_type, entity_id,
+           old_values, new_values)
+        VALUES
+          ($1, 'MODULE_DELETED', 'institutional_modules',
+           $2, $3::jsonb, $4::jsonb)
+        `,
+        [
+          user.id,
+          moduleId,
+          JSON.stringify(previous.rows[0]),
+          JSON.stringify(result.rows[0]),
+        ]
+      );
+
+      await client.query("COMMIT");
+
+      return NextResponse.json({
+        success: true,
+        message: "Module deleted successfully",
+        data: result.rows[0],
+        meta: null,
+      });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
-
-    return NextResponse.json({
-      success: true,
-      message: "Module deleted successfully",
-    });
   } catch (error) {
     return databaseError(error);
   }

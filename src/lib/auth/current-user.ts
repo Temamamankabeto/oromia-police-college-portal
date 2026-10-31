@@ -6,7 +6,12 @@ import {
   verifySessionToken,
 } from "@/lib/auth/session";
 
-export type UserRole = "ADMIN" | "REVIEWER" | "APPROVER";
+export type UserRole =
+  | "ADMIN"
+  | "DEVELOPER"
+  | "REVIEWER"
+  | "APPROVER"
+  | "TESTER";
 
 export type CurrentUser = {
   id: string;
@@ -45,7 +50,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       AND u.is_active = TRUE
       AND u.session_version = $2
       AND u.deleted_at IS NULL
-      AND r.role_code IN ('ADMIN', 'REVIEWER', 'APPROVER')
+      AND r.role_code IN ('ADMIN', 'DEVELOPER', 'REVIEWER', 'APPROVER', 'TESTER')
     LIMIT 1
     `,
     [session.userId, session.sessionVersion]

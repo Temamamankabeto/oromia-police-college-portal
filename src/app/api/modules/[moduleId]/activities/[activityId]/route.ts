@@ -45,7 +45,8 @@ function validOrigin(request: NextRequest) {
   return (
     origin === "https://opc.osdavc.com" ||
     (process.env.NODE_ENV === "development" &&
-      origin === "http://127.0.0.1:3000")
+      (origin === "http://127.0.0.1:3000" ||
+        origin === "http://localhost:3000"))
   );
 }
 

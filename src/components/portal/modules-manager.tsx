@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ActivitiesManager from "./activities-manager";
 import ObjectivesManager from "./objectives-manager";
 
+type Project = {
+  id: string;
+  project_code: string;
+  title: string;
+  status: string;
+};
+
 type Module = {
+  project_id: string;
   id: string;
   module_code: string;
   title: string;
@@ -14,6 +22,7 @@ type Module = {
 };
 
 type FormData = {
+  project_id: string;
   module_code: string;
   title: string;
   description: string;
@@ -22,6 +31,7 @@ type FormData = {
 };
 
 const emptyForm: FormData = {
+  project_id: "",
   module_code: "",
   title: "",
   description: "",
@@ -34,20 +44,57 @@ const inputClass =
 
 export default function ModulesManager({
   canManage,
+  initialProjectId = "",
+  initialCreate = false,
 }: {
   canManage: boolean;
+  initialProjectId?: string;
+  initialCreate?: boolean;
 }) {
+  const initialRequest = {
+    projectId: initialProjectId,
+    create: initialCreate,
+  };
+
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectFilter, setProjectFilter] = useState(
+    initialRequest.projectId || "all"
+  );
+  const [projectsLoading, setProjectsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [editing, setEditing] = useState<Module | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormData>(emptyForm);
+  const [showForm, setShowForm] = useState(
+    canManage && initialRequest.create && Boolean(initialRequest.projectId)
+  );
+  const [form, setForm] = useState<FormData>(() => ({
+    ...emptyForm,
+    project_id: initialRequest.projectId,
+  }));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  const loadProjects = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch("/api/projects", {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success || !Array.isArray(result.data)) {
+      throw new Error(result.message || "Unable to load projects");
+    }
+
+    if (!signal?.aborted) {
+      setProjects(result.data);
+    }
+  }, []);
 
   const loadModules = useCallback(async () => {
     setLoading(true);
@@ -74,6 +121,30 @@ export default function ModulesManager({
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function initialLoadProjects() {
+      try {
+        await loadProjects(controller.signal);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(
+            err instanceof Error ? err.message : "Unable to load projects"
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setProjectsLoading(false);
+        }
+      }
+    }
+
+    void initialLoadProjects();
+
+    return () => controller.abort();
+  }, [loadProjects]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,13 +196,19 @@ export default function ModulesManager({
         (statusFilter === "active" && item.is_active) ||
         (statusFilter === "inactive" && !item.is_active);
 
-      return matchesSearch && matchesStatus;
+      const matchesProject =
+        projectFilter === "all" || item.project_id === projectFilter;
+
+      return matchesSearch && matchesStatus && matchesProject;
     });
-  }, [modules, search, statusFilter]);
+  }, [modules, search, statusFilter, projectFilter]);
 
   function openCreate() {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      project_id: projectFilter === "all" ? "" : projectFilter,
+    });
     setError("");
     setNotice("");
     setShowForm(true);
@@ -140,6 +217,7 @@ export default function ModulesManager({
   function openEdit(item: Module) {
     setEditing(item);
     setForm({
+      project_id: item.project_id,
       module_code: item.module_code,
       title: item.title,
       description: item.description || "",
@@ -177,6 +255,10 @@ export default function ModulesManager({
         throw new Error("Display order must be between 0 and 100000");
       }
 
+      if (!editing && !form.project_id) {
+        throw new Error("Please select a project.");
+      }
+
       const payload = {
         module_code: form.module_code.trim().toUpperCase(),
         title: form.title.trim(),
@@ -193,7 +275,9 @@ export default function ModulesManager({
         method: editing ? "PATCH" : "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(
+          editing ? payload : { ...payload, project_id: form.project_id }
+        ),
       });
 
       const result = await response.json();
@@ -326,6 +410,28 @@ export default function ModulesManager({
           <form onSubmit={saveModule} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block space-y-2 text-sm font-medium">
+                <span>Project *</span>
+                <select
+                  required
+                  disabled={Boolean(editing) || projectsLoading}
+                  className={inputClass}
+                  value={form.project_id}
+                  onChange={e =>
+                    setForm(current => ({
+                      ...current,
+                      project_id: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select Project</option>
+                  {projects.map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.project_code} - {project.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-2 text-sm font-medium">
                 <span>Module Code *</span>
                 <input
                   required
@@ -442,9 +548,30 @@ export default function ModulesManager({
             <option value="inactive">Inactive</option>
           </select>
 
+          <select
+            aria-label="Filter modules by project"
+            value={projectFilter}
+            onChange={e => setProjectFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Projects</option>
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>
+                {project.project_code} - {project.title}
+              </option>
+            ))}
+          </select>
+
           <button
             type="button"
-            onClick={() => void loadModules()}
+            onClick={() => {
+              void loadModules();
+              void loadProjects().catch(err =>
+                setError(
+                  err instanceof Error ? err.message : "Unable to load projects"
+                )
+              );
+            }}
             disabled={loading}
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
@@ -456,6 +583,7 @@ export default function ModulesManager({
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
+                <th className="px-5 py-4">Project</th>
                 <th className="px-5 py-4">Code</th>
                 <th className="px-5 py-4">Module Name</th>
                 <th className="px-5 py-4">Description</th>
@@ -470,19 +598,23 @@ export default function ModulesManager({
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={canManage ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={canManage ? 8 : 7} className="px-5 py-10 text-center text-slate-500">
                     Loading modules...
                   </td>
                 </tr>
               ) : filteredModules.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={canManage ? 8 : 7} className="px-5 py-10 text-center text-slate-500">
                     No institutional modules found.
                   </td>
                 </tr>
               ) : (
                 filteredModules.map(item => (
                   <tr key={item.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-4 text-slate-600">
+                      {projects.find(project => project.id === item.project_id)?.title ||
+                        "Unknown Project"}
+                    </td>
                     <td className="px-5 py-4 font-semibold text-blue-900">
                       {item.module_code}
                     </td>

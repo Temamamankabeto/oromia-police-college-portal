@@ -35,7 +35,8 @@ function validOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
   return origin === "https://opc.osdavc.com" ||
     (process.env.NODE_ENV === "development" &&
-      origin === "http://127.0.0.1:3000");
+      (origin === "http://127.0.0.1:3000" ||
+        origin === "http://localhost:3000"));
 }
 
 function databaseError(error: unknown) {

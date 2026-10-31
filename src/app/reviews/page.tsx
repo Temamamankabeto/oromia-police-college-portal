@@ -12,6 +12,10 @@ export default async function ReviewsPage() {
     redirect("/login");
   }
 
+  if (user.role_code !== "ADMIN" && user.role_code !== "REVIEWER") {
+    redirect("/dashboard");
+  }
+
   return (
     <DashboardShell>
       <ReviewsManager role={user.role_code} />
