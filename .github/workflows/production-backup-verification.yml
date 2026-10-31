@@ -24,8 +24,8 @@ jobs:
 
       - name: Verify existing production backup
         env:
-          SSH_HOST: ${{ vars.OPC_SSH_HOST }}
-          SSH_USER: ${{ vars.OPC_SSH_USER }}
+          SSH_HOST: 91.204.209.46
+          SSH_USER: osdavcax
         run: |
           set -euo pipefail
           test -n "$SSH_HOST"
